@@ -38,6 +38,7 @@
 
 #include <spinlock.h>
 #include <limits.h>
+#include <file.h>
 
 struct addrspace;
 struct thread;

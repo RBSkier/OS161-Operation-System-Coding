@@ -48,6 +48,7 @@
 #include <current.h>
 #include <addrspace.h>
 #include <vnode.h>
+#include <file.h>
 
 /*
  * The process for the kernel; this holds all the kernel-only threads.
@@ -62,6 +63,7 @@ struct proc *
 proc_create(const char *name)
 {
 	struct proc *proc;
+	// int ret;
 
 	proc = kmalloc(sizeof(*proc));
 	if (proc == NULL) {
@@ -81,6 +83,10 @@ proc_create(const char *name)
 
 	/* VFS fields */
 	proc->p_cwd = NULL;
+
+	/* File descriptor talbe*/
+	// ret = fd_table_init(proc);
+    // kprintf("-----+++++++++ret: %d======---------", ret);
 
 	return proc;
 }

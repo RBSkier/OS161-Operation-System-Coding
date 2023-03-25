@@ -16,13 +16,14 @@
 #include <syscall.h>
 #include <copyinout.h>
 
-/*
- * Add your file-related functions here ...
- */
-int sys_open(const char *filename, int flags, mode_t mode){
+int sys_open(const char *filename, int flags, mode_t mode, int *retval){
     size_t got;
     int fd, ret;
     struct vnode *vn_ptr;
+
+    kprintf("-----curproc->fd_table[0]->flags: %d---------",curproc->fd_table[0]->flags);
+    kprintf("-----curproc->fd_table[1]->flags: %d---------",curproc->fd_table[1]->flags);
+    kprintf("-----curproc->fd_table[2]->flags: %d---------",curproc->fd_table[2]->flags);
 
     /* 
      * Find out the new fd that is available. 
@@ -46,9 +47,7 @@ int sys_open(const char *filename, int flags, mode_t mode){
 
     //call vfs_open to get vnode address of the file 
     ret = vfs_open(kfilename, flags, mode, &vn_ptr);
-
 	if(ret != 0)
-        //TODOO
     	return ret;
 
     curproc->fd_table[fd] = (struct openfile *)kmalloc(sizeof(struct openfile));
@@ -57,8 +56,59 @@ int sys_open(const char *filename, int flags, mode_t mode){
     curproc->fd_table[fd]->vn_ptr = vn_ptr;
 
 	kfree(kfilename);
+    *retval = fd;
 
-	return fd;
+	return 0;
+}
+
+int fd_table_init(struct proc *newProc)
+{
+    int ret;
+    struct vnode *vn_in, *vn_out, *vn_err;
+    char *console = kstrdup("con:");
+
+    //intialize stdin file descriptor
+    if(newProc->fd_table[0] == NULL){
+        ret = vfs_open(console, O_RDONLY, 0664, &vn_in);
+        // ret = vfs_open(console, O_RDONLY, 0664, &vn_ptr1);
+        if(ret != 0){
+            kprintf("file descriptor initialize failed\n");
+            return ret;
+        }
+        newProc->fd_table[0] = (struct openfile *)kmalloc(sizeof(struct openfile));
+        newProc->fd_table[0]->flags = O_RDONLY;
+        newProc->fd_table[0]->offset = 0;
+        newProc->fd_table[0]->vn_ptr = vn_in;
+    }
+    
+    //intialize stdout file descriptor
+    if(newProc->fd_table[1] == NULL){
+        ret = vfs_open(console, O_WRONLY, 0, &vn_out);
+        if(ret != 0){
+            kprintf("file descriptor initialize failed\n");
+            return ret;
+        }
+        newProc->fd_table[1] = (struct openfile *)kmalloc(sizeof(struct openfile));
+        newProc->fd_table[1]->flags = O_WRONLY;
+        newProc->fd_table[1]->offset = 0;
+        newProc->fd_table[1]->vn_ptr = vn_out;
+    }
+
+    //intialize stderr file descriptor
+    if(newProc->fd_table[1] == NULL){
+        ret = vfs_open(console, O_WRONLY, 0, &vn_err);
+        if(ret != 0){
+            kprintf("file descriptor initialize failed\n");
+            return ret;
+        }
+        newProc->fd_table[2] = (struct openfile *)kmalloc(sizeof(struct openfile));
+        newProc->fd_table[2]->flags = O_WRONLY;
+        newProc->fd_table[2]->offset = 0;
+        newProc->fd_table[2]->vn_ptr = vn_err;
+    }
+
+    kfree(console);
+    return 0;
 }
 
 ssize_t sys_write(int fd, const void *buf, size_t nbytes){
@@ -74,7 +124,6 @@ ssize_t sys_write(int fd, const void *buf, size_t nbytes){
 
     uio_uinit(&iov, &uio, (userptr_t)buf, nbytes, offset, UIO_WRITE);
     // VOP_WRITE(vn, uio); 
-
 
     return 0;
 }
