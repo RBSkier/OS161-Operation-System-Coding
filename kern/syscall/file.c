@@ -21,10 +21,6 @@ int sys_open(const char *filename, int flags, mode_t mode, int *retval){
     int fd, ret;
     struct vnode *vn_ptr;
 
-    kprintf("-----curproc->fd_table[0]->flags: %d---------",curproc->fd_table[0]->flags);
-    kprintf("-----curproc->fd_table[1]->flags: %d---------",curproc->fd_table[1]->flags);
-    kprintf("-----curproc->fd_table[2]->flags: %d---------",curproc->fd_table[2]->flags);
-
     /* 
      * Find out the new fd that is available. 
      * Fd starts from 3 as 0, 1, 2 have been used as stdin stdout stderr. 
@@ -63,17 +59,17 @@ int sys_open(const char *filename, int flags, mode_t mode, int *retval){
 
 int fd_table_init(struct proc *newProc)
 {
-    int ret;
+    int ret1, ret2, ret3;
     struct vnode *vn_in, *vn_out, *vn_err;
-    char *console = kstrdup("con:");
+    char *stdin = kstrdup("con:");
+    char *stdout = kstrdup("con:");
+    char *stderr = kstrdup("con:");
 
     //intialize stdin file descriptor
     if(newProc->fd_table[0] == NULL){
-        ret = vfs_open(console, O_RDONLY, 0664, &vn_in);
-        // ret = vfs_open(console, O_RDONLY, 0664, &vn_ptr1);
-        if(ret != 0){
-            kprintf("file descriptor initialize failed\n");
-            return ret;
+        ret1 = vfs_open(stdin, O_RDONLY, 0664, &vn_in);
+        if(ret1 != 0){
+            return ret1;
         }
         newProc->fd_table[0] = (struct openfile *)kmalloc(sizeof(struct openfile));
         newProc->fd_table[0]->flags = O_RDONLY;
@@ -83,10 +79,9 @@ int fd_table_init(struct proc *newProc)
     
     //intialize stdout file descriptor
     if(newProc->fd_table[1] == NULL){
-        ret = vfs_open(console, O_WRONLY, 0, &vn_out);
-        if(ret != 0){
-            kprintf("file descriptor initialize failed\n");
-            return ret;
+        ret2 = vfs_open(stdout, O_WRONLY, 0664, &vn_out);
+        if(ret2 != 0){
+            return ret2;
         }
         newProc->fd_table[1] = (struct openfile *)kmalloc(sizeof(struct openfile));
         newProc->fd_table[1]->flags = O_WRONLY;
@@ -95,11 +90,10 @@ int fd_table_init(struct proc *newProc)
     }
 
     //intialize stderr file descriptor
-    if(newProc->fd_table[1] == NULL){
-        ret = vfs_open(console, O_WRONLY, 0, &vn_err);
-        if(ret != 0){
-            kprintf("file descriptor initialize failed\n");
-            return ret;
+    if(newProc->fd_table[2] == NULL){
+        ret3 = vfs_open(stderr, O_WRONLY, 0664, &vn_err);
+        if(ret3 != 0){
+            return ret3;
         }
         newProc->fd_table[2] = (struct openfile *)kmalloc(sizeof(struct openfile));
         newProc->fd_table[2]->flags = O_WRONLY;
@@ -107,7 +101,6 @@ int fd_table_init(struct proc *newProc)
         newProc->fd_table[2]->vn_ptr = vn_err;
     }
 
-    kfree(console);
     return 0;
 }
 
@@ -116,7 +109,7 @@ ssize_t sys_write(int fd, const void *buf, size_t nbytes){
     // struct vnode vn;
     struct iovec iov;
     struct uio uio;    
-    kprintf("+++%d+++\n",fd);
+    kprintf("-----------fd: %d---------\n",fd);
     //还缺vn和offset，要通过fd拿到对应的vn和offset
     // fd_table = curproc->fd_table;   //怎么获取fd为1的
     

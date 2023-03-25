@@ -63,7 +63,6 @@ struct proc *
 proc_create(const char *name)
 {
 	struct proc *proc;
-	// int ret;
 
 	proc = kmalloc(sizeof(*proc));
 	if (proc == NULL) {
@@ -83,10 +82,6 @@ proc_create(const char *name)
 
 	/* VFS fields */
 	proc->p_cwd = NULL;
-
-	/* File descriptor talbe*/
-	// ret = fd_table_init(proc);
-    // kprintf("-----+++++++++ret: %d======---------", ret);
 
 	return proc;
 }
@@ -200,6 +195,7 @@ struct proc *
 proc_create_runprogram(const char *name)
 {
 	struct proc *newproc;
+	int ret;
 
 	newproc = proc_create(name);
 	if (newproc == NULL) {
@@ -211,6 +207,12 @@ proc_create_runprogram(const char *name)
 	newproc->p_addrspace = NULL;
 
 	/* VFS fields */
+
+	/* Fd_table fields */
+	ret = fd_table_init(newproc);
+	if(ret != 0){
+		kprintf("file descriptor initialize failed\n");
+	}
 
 	/*
 	 * Lock the current process to copy its current directory.
