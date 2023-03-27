@@ -15,6 +15,7 @@ int
 main(int argc, char * argv[])
 {
         int fd, r, i, j , k;
+        // int fd, r;
         (void) argc;
         (void) argv;
 
@@ -124,5 +125,3 @@ main(int argc, char * argv[])
 
         return 0;
 }
-
-

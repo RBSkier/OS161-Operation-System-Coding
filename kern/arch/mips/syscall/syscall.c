@@ -120,9 +120,7 @@ syscall(struct trapframe *tf)
 		break;
 
 		case SYS_write:
-		err = sys_write(tf->tf_a0, 
-				(userptr_t)tf->tf_a1,
-				tf->tf_a2);
+		err = sys_write(tf->tf_a0, (const void *)tf->tf_a1, tf->tf_a2, &retval);
 		break;
 
 	    default:
