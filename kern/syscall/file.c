@@ -21,48 +21,49 @@ int fd_table_init(struct proc *newProc)
 {
     int ret1, ret2, ret3;
     struct vnode *vn_in, *vn_out, *vn_err;
-    char *stdin = kstrdup("con:");
-    char *stdout = kstrdup("con:");
-    char *stderr = kstrdup("con:");
+    char *stdin, *stdout, *stderr;
 
     //intialize stdin file descriptor
-    if(newProc->fd_table[0] == NULL){
-        ret1 = vfs_open(stdin, O_RDONLY, 0, &vn_in);
-        if(ret1 != 0){
-            return ret1;
-        }
-        newProc->fd_table[0] = (struct openfile *)kmalloc(sizeof(struct openfile));
-        newProc->fd_table[0]->flags = O_RDONLY;
-        newProc->fd_table[0]->offset = 0;
-        newProc->fd_table[0]->vn_ptr = vn_in;
-        newProc->fd_table[0]->lock = lock_create(stdin);
+    stdin = kstrdup("con:");
+    ret1 = vfs_open(stdin, O_RDONLY, 0, &vn_in);
+    if(ret1 != 0){
+        kfree(stdin);
+        return ret1;
     }
+    newProc->fd_table[0] = (struct openfile *)kmalloc(sizeof(struct openfile));
+    newProc->fd_table[0]->flags = O_RDONLY;
+    newProc->fd_table[0]->offset = 0;
+    newProc->fd_table[0]->vn_ptr = vn_in;
+    newProc->fd_table[0]->lock = lock_create(stdin);
+    kfree(stdin);
     
     //intialize stdout file descriptor
-    if(newProc->fd_table[1] == NULL){
-        ret2 = vfs_open(stdout, O_WRONLY, 0, &vn_out);
-        if(ret2 != 0){
-            return ret2;
-        }
-        newProc->fd_table[1] = (struct openfile *)kmalloc(sizeof(struct openfile));
-        newProc->fd_table[1]->flags = O_WRONLY;
-        newProc->fd_table[1]->offset = 0;
-        newProc->fd_table[1]->vn_ptr = vn_out;
-        newProc->fd_table[1]->lock = lock_create(stdout);
+    stdout = kstrdup("con:");
+    ret2 = vfs_open(stdout, O_WRONLY, 0, &vn_out);
+    if(ret2 != 0){
+        kfree(stdout);
+        return ret2;
     }
+    newProc->fd_table[1] = (struct openfile *)kmalloc(sizeof(struct openfile));
+    newProc->fd_table[1]->flags = O_WRONLY;
+    newProc->fd_table[1]->offset = 0;
+    newProc->fd_table[1]->vn_ptr = vn_out;
+    newProc->fd_table[1]->lock = lock_create(stdout);
+    kfree(stdout);
 
     //intialize stderr file descriptor
-    if(newProc->fd_table[2] == NULL){
-        ret3 = vfs_open(stderr, O_WRONLY, 0, &vn_err);
-        if(ret3 != 0){
-            return ret3;
-        }
-        newProc->fd_table[2] = (struct openfile *)kmalloc(sizeof(struct openfile));
-        newProc->fd_table[2]->flags = O_WRONLY;
-        newProc->fd_table[2]->offset = 0;
-        newProc->fd_table[2]->vn_ptr = vn_err;
-        newProc->fd_table[2]->lock = lock_create(stderr);
+    stderr = kstrdup("con:");
+    ret3 = vfs_open(stderr, O_WRONLY, 0, &vn_err);
+    if(ret3 != 0){
+        kfree(stderr);
+        return ret3;
     }
+    newProc->fd_table[2] = (struct openfile *)kmalloc(sizeof(struct openfile));
+    newProc->fd_table[2]->flags = O_WRONLY;
+    newProc->fd_table[2]->offset = 0;
+    newProc->fd_table[2]->vn_ptr = vn_err;
+    newProc->fd_table[2]->lock = lock_create(stderr);
+    kfree(stderr);
 
     return 0;
 }
