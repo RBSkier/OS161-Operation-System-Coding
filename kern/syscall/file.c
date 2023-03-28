@@ -81,22 +81,31 @@ int sys_open(const char *filename, int flags, mode_t mode, int *retval)
      */
     spinlock_acquire(&curproc->p_lock);
     fd = 3;
-    while(curproc->fd_table[fd] != NULL && fd < OPEN_MAX)
+    while(curproc->fd_table[fd] != NULL && fd < OPEN_MAX){
         fd++;
+    }
     spinlock_release(&curproc->p_lock);
-    if(fd == OPEN_MAX)
+    if(fd == OPEN_MAX){
+        kprintf("--------Call sys_open Error------------\n");
+        *retval = -1;
 		return ENFILE;
+    }
 
     //copy the string from user space to kernel space.
     char *kfilename = (char*)kmalloc(sizeof(char)*PATH_MAX);
-    if(kfilename == NULL)
-		return ENOMEM;
+    if(kfilename == NULL){
+        kprintf("--------Call sys_open Error------------\n");
+        *retval = -1;
+		return ENOMEM; 
+    }
 	copyinstr((const_userptr_t)filename, kfilename, PATH_MAX, &got);
-
     //call vfs_open to get vnode address of the file 
     ret = vfs_open(kfilename, flags, mode, &vn_ptr);
-	if(ret != 0)
+	if(ret != 0){
+        kprintf("--------Call sys_open Error------------\n");
+        *retval = -1;
     	return ret;
+    }
 
     curproc->fd_table[fd] = (struct openfile *)kmalloc(sizeof(struct openfile));
     curproc->fd_table[fd]->flags = flags;
@@ -117,20 +126,24 @@ ssize_t sys_write(int fd, const void *buf, size_t nbytes, int *retval)
     struct vnode *vn_ptr;
     off_t offset;
     int ret;
-    
+
+    lock_acquire(curproc->fd_table[fd]->lock);
     if(curproc->fd_table[fd] == NULL || fd > OPEN_MAX || fd < 0){
         kprintf("--------Call VOP_WRITE Error------------\n");
+        *retval = -1;
+        lock_release(curproc->fd_table[fd]->lock);
 		return EBADF;
 	}
 	if(curproc->fd_table[fd]->flags == O_RDONLY){
         kprintf("--------Call VOP_WRITE Error------------\n");
-		return EINVAL;
+        *retval = -1;
+        lock_release(curproc->fd_table[fd]->lock);
+		return EACCES;
 	}
 
-    lock_acquire(curproc->fd_table[fd]->lock);
     offset = curproc->fd_table[fd]->offset;
-    uio_uinit(&iov, &uio, (userptr_t)buf, nbytes, offset, UIO_WRITE);
     vn_ptr = curproc->fd_table[fd]->vn_ptr;
+    uio_uinit(&iov, &uio, (userptr_t)buf, nbytes, offset, UIO_WRITE);
     ret = VOP_WRITE(vn_ptr, &uio);
     if(ret){
         kprintf("--------Call VOP_WRITE Error------------\n");
@@ -138,8 +151,47 @@ ssize_t sys_write(int fd, const void *buf, size_t nbytes, int *retval)
         lock_release(curproc->fd_table[fd]->lock); 
         return ret;
     }
-    curproc->fd_table[fd]->offset = uio.uio_offset;
     *retval = nbytes - uio.uio_resid;
+    curproc->fd_table[fd]->offset = uio.uio_offset;
+    lock_release(curproc->fd_table[fd]->lock);
+
+    return 0;
+}
+
+ssize_t sys_read(int fd, void *buf, size_t buflen, int *retval)
+{
+    off_t offset;
+    struct vnode *vn_ptr;
+    struct uio uio;
+    struct iovec iov;
+    int ret;
+
+    lock_acquire(curproc->fd_table[fd]->lock);
+    if(curproc->fd_table[fd] == NULL || fd > OPEN_MAX || fd < 0){
+        kprintf("--------Call VOP_READ Error------------\n");
+        *retval = -1;
+        lock_release(curproc->fd_table[fd]->lock);
+        return EBADF;
+    }
+    if(curproc->fd_table[fd]->flags == O_WRONLY){
+        kprintf("--------Call VOP_READ Error------------\n");
+        *retval = -1;
+        lock_release(curproc->fd_table[fd]->lock);
+        return EACCES;
+    }
+
+    offset = curproc->fd_table[fd]->offset;
+    vn_ptr = curproc->fd_table[fd]->vn_ptr;
+    uio_uinit(&iov, &uio, (userptr_t)buf, buflen, offset, UIO_READ);
+    ret = VOP_READ(vn_ptr, &uio);
+    if(ret){
+        kprintf("--------Call VOP_READ Error------------\n");
+		*retval = -1;
+        lock_release(curproc->fd_table[fd]->lock); 
+        return ret;
+    }
+    *retval = buflen - uio.uio_resid;
+    curproc->fd_table[fd]->offset = uio.uio_offset;
     lock_release(curproc->fd_table[fd]->lock);
 
     return 0;
