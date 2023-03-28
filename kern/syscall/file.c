@@ -23,6 +23,7 @@ int fd_table_init(struct proc *newProc)
     struct vnode *vn_in, *vn_out, *vn_err;
     char *stdin, *stdout, *stderr;
 
+    bzero(newProc->fd_table, sizeof(newProc->fd_table));
     //intialize stdin file descriptor
     stdin = kstrdup("con:");
     ret1 = vfs_open(stdin, O_RDONLY, 0, &vn_in);
@@ -194,5 +195,114 @@ ssize_t sys_read(int fd, void *buf, size_t buflen, int *retval)
     curproc->fd_table[fd]->offset = uio.uio_offset;
     lock_release(curproc->fd_table[fd]->lock);
 
+    return 0;
+}
+
+off_t sys_lseek(int fd, off_t pos, int whence, int *retval) {
+    struct openfile *file;
+    int result;
+
+    if (fd < 0 || fd >= OPEN_MAX || curproc->fd_table[fd] == NULL) {
+        *retval = EBADF;
+        return -1;
+    }
+
+    file = curproc->fd_table[fd];
+
+    lock_acquire(file->lock);
+
+    switch (whence) {
+        case SEEK_SET:
+            if (pos < 0) {
+                result = EINVAL;
+            } else {
+                file->offset = pos;
+                result = file->offset;
+            }
+            break;
+        case SEEK_CUR:
+            if (file->offset + pos < 0) {
+                result = EINVAL;
+            } else {
+                file->offset += pos;
+                result = file->offset;
+            }
+            break;
+        case SEEK_END:
+            if (file->vn_ptr == NULL) {
+                result = EFAULT;
+            } else {
+                struct stat stat_buf;
+                VOP_STAT(file->vn_ptr, &stat_buf);
+                result = stat_buf.st_size;
+                if (result == -1) {
+                    result = EFAULT;
+                    break;
+                }
+                if (file->offset + pos < 0) {
+                    result = EINVAL;
+                } else {
+                    file->offset = result + pos;
+                    result = file->offset;
+                }
+            }
+            break;
+        default:
+            result = EINVAL;
+            break;
+    }
+
+    lock_release(file->lock);
+    *retval = result;
+    return 0;
+}
+
+int sys_close(int fd, int *retval) {
+
+    lock_acquire(curproc->fd_table[fd]->lock);
+    if (fd < 0 || fd > OPEN_MAX || curproc->fd_table[fd] == NULL) {
+        *retval = -1;
+        return EBADF;
+    }
+    vfs_close(curproc->fd_table[fd]->vn_ptr);   //vnode->vn_refcount-- or destory.
+    lock_release(curproc->fd_table[fd]->lock);
+
+    lock_destroy(curproc->fd_table[fd]->lock);  //destroy the fd lock after release lock.
+    kfree(curproc->fd_table[fd]);
+    curproc->fd_table[fd] = NULL;
+
+    *retval = 0;
+    return 0;
+}
+
+
+int sys_dup2(int oldfd, int newfd, int *retval) {
+    struct openfile *file;
+
+    if (oldfd < 0 || oldfd >= OPEN_MAX || curproc->fd_table[oldfd] == NULL) {
+        *retval = EBADF;
+        return -1;
+    }
+
+    if (newfd < 0 || newfd >= OPEN_MAX) {
+        *retval = EBADF;
+        return -1;
+    }
+
+    if (oldfd == newfd) {
+        *retval = newfd;
+        return 0;
+    }
+
+    file = curproc->fd_table[oldfd];
+
+    if (curproc->fd_table[newfd] != NULL) {
+        sys_close(newfd, retval);
+    }
+
+    curproc->fd_table[newfd] = file;
+    lock_acquire(file->lock);
+
+    *retval = newfd;
     return 0;
 }
