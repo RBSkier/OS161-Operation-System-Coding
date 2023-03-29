@@ -35,6 +35,7 @@
 #include <thread.h>
 #include <current.h>
 #include <syscall.h>
+#include <endian.h>
 
 
 /*
@@ -80,7 +81,9 @@ syscall(struct trapframe *tf)
 {
 	int callno;
 	int32_t retval;
+	int64_t retval64;
 	int err;
+	int retval64_uflag;
 
 	KASSERT(curthread != NULL);
 	KASSERT(curthread->t_curspl == 0);
@@ -98,6 +101,8 @@ syscall(struct trapframe *tf)
 	 */
 
 	retval = 0;
+	retval64 = 0;
+	retval64_uflag = 0;
 
 	switch (callno) {
 	    case SYS_reboot:
@@ -127,8 +132,9 @@ syscall(struct trapframe *tf)
 		err = sys_read(tf->tf_a0, (void *)tf->tf_a1, tf->tf_a2, &retval);
 		break;
 
-		case SYS_lseek: 
-		err = sys_lseek(tf->tf_a0, tf->tf_a1, tf->tf_a2, &retval); 
+		case SYS_lseek:
+		retval64_uflag = 1;
+		err = sys_lseek(tf->tf_a0, tf->tf_a2, tf->tf_a3, tf->tf_sp, &retval64);
 		break;
 
 		case SYS_close: 
@@ -155,7 +161,11 @@ syscall(struct trapframe *tf)
 		tf->tf_v0 = err;
 		tf->tf_a3 = 1;      /* signal an error */
 	}
-	else {
+	else if(retval64_uflag){
+		split64to32(retval64, &tf->tf_v0, &tf->tf_v1);
+		tf->tf_a3 = 0;
+	}
+	else{
 		/* Success. */
 		tf->tf_v0 = retval;
 		tf->tf_a3 = 0;      /* signal no error */
