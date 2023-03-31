@@ -195,7 +195,6 @@ struct proc *
 proc_create_runprogram(const char *name)
 {
 	struct proc *newproc;
-	int ret;
 
 	newproc = proc_create(name);
 	if (newproc == NULL) {
@@ -209,10 +208,7 @@ proc_create_runprogram(const char *name)
 	/* VFS fields */
 
 	/* Fd_table fields */
-	ret = fd_table_init(newproc);
-	if(ret != 0){
-		kprintf("file descriptor initialize failed\n");
-	}
+	fd_table_init(newproc);
 
 	/*
 	 * Lock the current process to copy its current directory.

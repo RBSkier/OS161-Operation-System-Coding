@@ -1,1 +1,45 @@
-Add your design document in here.
+Assignment2 Design Jinming Liu, Jingrao Xv
+
+To implement all the function, we design a new structure called 'openfile'. It contains the
+key members such as file offset, vnode pointer and synchronization lock. In order to associate
+with the file descriptor and the struct openfile, we added an array member called fd_table in
+each process structure. Each member of the fd_table is a pointer to an instance of struct openfile.
+
+So, in order to initialize the stdin, stdout and stderr when a new process is created. We
+writed the 'fd_table_init' function which was only called in function 'proc_create_runprogram'
+to make sure that the fd_table only be initialize once. It is worth noting that because you
+need to specify file descriptors for each standard input/output setting, you cannot do this by
+calling the sys_open function directly. Instead, it need to assign values to the 0, 1, and 2
+file descriptors separately
+
+For sys_open function, it requires the process lock to safely access the file descriptor table
+concurrently and then finds an available file descriptor starting from 3, as 0, 1, and 2 are
+already used as stdin, stdout, and stderr. If the file descriptor has exceeded the OPEN MAX,
+it would not create a new instance of openfile. If there are any file descriptor
+
+For sys_read and sys_write function, it will check the openfile flags value. Writing to a
+read-only file or reading to a writing-only file results in an error. If the check passes. It
+will initialize an uio structure and use it to call VOP_READ/VOP_WRITE. Finally, the offset of
+openfile will be update according to the result fo VOP operations.
+
+
+For sys_close function, it's worth noting that in addition to calling vfs_close to handle the
+vnode node, it also clear the openfile members like destory the openfile lock, and then free
+the space of openfile.
+
+For sys_lseek function, we define a new varialbe in syscall called retval64 which is 64 bit. And
+use this variables to obtain the return value of lseek. And retval64 will be divided into 32
+bit when dealing the calling result. In addition, it gets the values of whence from stack
+pointer of trapframe.  it contians the judgement of whether the vnode is seekable by using
+‘VOP_ISSEEKABLE’ and it will return ESPIPE error code if the result is unseekable.
+
+For sys_dup2 funcion, we added the judgment that if the new file descriptor already exists,
+it will close the file first and then point to the old file, and if it does not, it will point
+directly to the old file.
+
+What’s more, each function has a corresponding lock to ensure thread synchronization. The
+lock is associated with openfile. If multiple file descriptor points to the same openfile,
+the file operation can be protected by the lock.
+
+Each function will valid the file descriptor value first, and other judgments will vary from
+function to function.

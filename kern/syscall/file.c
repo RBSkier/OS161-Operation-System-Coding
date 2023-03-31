@@ -76,6 +76,7 @@ int sys_open(const char *filename, int flags, mode_t mode, int *retval)
     size_t got;
     int fd, ret;
     struct vnode *vn_ptr;
+    struct openfile *newfile;
 
     /*
      * Find out the new fd that is available. 
@@ -87,10 +88,12 @@ int sys_open(const char *filename, int flags, mode_t mode, int *retval)
     while(curproc->fd_table[fd] != NULL && fd < OPEN_MAX){
         fd++;
     }
-    spinlock_release(&curproc->p_lock);
     if(fd >= OPEN_MAX){
 		return ENFILE;
+    }else{
+        newfile = (struct openfile *)kmalloc(sizeof(struct openfile));
     }
+    spinlock_release(&curproc->p_lock);
 
     //copy the string from user space to kernel space.
     char *kfilename = (char*)kmalloc(sizeof(char)*PATH_MAX);
@@ -104,11 +107,11 @@ int sys_open(const char *filename, int flags, mode_t mode, int *retval)
     	return ret;
     }
 
-    curproc->fd_table[fd] = (struct openfile *)kmalloc(sizeof(struct openfile));
-    curproc->fd_table[fd]->flags = flags;
-	curproc->fd_table[fd]->offset = 0;
-    curproc->fd_table[fd]->vn_ptr = vn_ptr;
-    curproc->fd_table[fd]->lock = lock_create(kfilename);
+    newfile->flags = flags;
+	newfile->offset = 0;
+    newfile->vn_ptr = vn_ptr;
+    newfile->lock = lock_create(kfilename);
+    curproc->fd_table[fd] = newfile;
 
 	kfree(kfilename);
 
@@ -124,16 +127,14 @@ ssize_t sys_write(int fd, const void *buf, size_t nbytes, int *retval)
     off_t offset;
     int ret;
 
-    lock_acquire(curproc->fd_table[fd]->lock);
     if(curproc->fd_table[fd] == NULL || fd >= OPEN_MAX || fd < 0){
-        lock_release(curproc->fd_table[fd]->lock);
 		return EBADF;
 	}
 	if(curproc->fd_table[fd]->flags == O_RDONLY){
-        lock_release(curproc->fd_table[fd]->lock);
 		return EBADF;
 	}
 
+    lock_acquire(curproc->fd_table[fd]->lock);
     offset = curproc->fd_table[fd]->offset;
     vn_ptr = curproc->fd_table[fd]->vn_ptr;
     uio_uinit(&iov, &uio, (userptr_t)buf, nbytes, offset, UIO_WRITE);
@@ -157,16 +158,14 @@ ssize_t sys_read(int fd, void *buf, size_t buflen, int *retval)
     struct iovec iov;
     int ret;
 
-    lock_acquire(curproc->fd_table[fd]->lock);
     if(curproc->fd_table[fd] == NULL || fd >= OPEN_MAX || fd < 0){
-        lock_release(curproc->fd_table[fd]->lock);
         return EBADF;
     }
     if(curproc->fd_table[fd]->flags == O_WRONLY){
-        lock_release(curproc->fd_table[fd]->lock);
         return EBADF;
     }
 
+    lock_acquire(curproc->fd_table[fd]->lock);
     offset = curproc->fd_table[fd]->offset;
     vn_ptr = curproc->fd_table[fd]->vn_ptr;
     uio_uinit(&iov, &uio, (userptr_t)buf, buflen, offset, UIO_READ);
@@ -183,17 +182,20 @@ ssize_t sys_read(int fd, void *buf, size_t buflen, int *retval)
 }
 
 int sys_close(int fd, int *retval) {
+    struct openfile *file;
 
-    lock_acquire(curproc->fd_table[fd]->lock);
-    if (fd < 0 || fd >= OPEN_MAX || curproc->fd_table[fd] == NULL) {
+    file = curproc->fd_table[fd];
+    if (fd < 0 || fd >= OPEN_MAX || file == NULL) {
         return EBADF;
     }
-    vfs_close(curproc->fd_table[fd]->vn_ptr);   
-    lock_release(curproc->fd_table[fd]->lock);
+
+    lock_acquire(file->lock);
+    vfs_close(file->vn_ptr);   
+    lock_release(file->lock);
     
-    //destroy the fd lock after it has been used for the last time.
-    lock_destroy(curproc->fd_table[fd]->lock);
-    kfree(curproc->fd_table[fd]);
+    //destroy the fd lock after it has been used for the last time. And reset the curproc->fd_table[fd].
+    lock_destroy(file->lock);
+    kfree(file);
     curproc->fd_table[fd] = NULL;
 
     *retval = 0;
@@ -221,7 +223,6 @@ ssize_t sys_lseek(int fd, uint32_t tf_a2, uint32_t tf_a3, int32_t tf_sp, int64_t
 	}
 
     file = curproc->fd_table[fd];
-
     lock_acquire(file->lock);
     switch (whence) {
         case SEEK_SET:
@@ -271,6 +272,7 @@ int sys_dup2(int oldfd, int newfd, int *retval) {
             return ret;
         }
 	}
+    //new file descriptor pointer pointer to the openfile which old file descriptor pointer is.
     curproc->fd_table[newfd] = curproc->fd_table[oldfd];
     lock_release(curproc->fd_table[oldfd]->lock);
 
