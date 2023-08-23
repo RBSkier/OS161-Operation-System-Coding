@@ -1,4 +1,4 @@
-Assignment2 Design Jinming Liu, Jingrao Xv
+Design Jinming Liu
 
 To implement all the function, we design a new structure called 'openfile'. It contains the
 key members such as file offset, vnode pointer and synchronization lock. In order to associate
